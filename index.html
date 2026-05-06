@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Smart Bin Controller</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; background: #f4f4f4; }
+        .btn { padding: 20px 40px; font-size: 20px; color: white; border: none; border-radius: 10px; cursor: pointer; }
+        .connect { background-color: #444; }
+        .open { background-color: #27ae60; display: none; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>🗑️ Smart Bin</h1>
+    <button id="connectBtn" class="btn connect">Connect to Bin</button>
+    <br>
+    <button id="openBtn" class="btn open">OPEN LID</button>
+
+    <script>
+        let binChar;
+        const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+        const CHAR_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            try {
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'SmartBin_ESP32' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                binChar = await service.getCharacteristic(CHAR_UUID);
+                
+                document.getElementById('openBtn').style.display = 'inline-block';
+                document.getElementById('connectBtn').innerText = "Connected!";
+            } catch (error) { console.log(error); }
+        });
+
+        document.getElementById('openBtn').addEventListener('click', async () => {
+            if (binChar) {
+                let val = new Uint8Array([49]); // '1' in ASCII
+                await binChar.writeValue(val);
+            }
+        });
+    </script>
+</body>
+</html>
