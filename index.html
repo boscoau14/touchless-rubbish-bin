@@ -3,44 +3,97 @@
 <head>
     <title>Smart Bin Controller</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding-top: 50px; background: #f4f4f4; }
-        .btn { padding: 20px 40px; font-size: 20px; color: white; border: none; border-radius: 10px; cursor: pointer; }
-        .connect { background-color: #444; }
-        .open { background-color: #27ae60; display: none; margin-top: 20px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding-top: 50px; background: #f4f4f4; color: #333; }
+        .btn { padding: 15px 30px; font-size: 18px; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 10px; transition: 0.3s; width: 200px; }
+        
+        #connectBtn { background-color: #3498db; }
+        #connectBtn:hover { background-color: #2980b9; }
+        
+        #openBtn { background-color: #2ecc71; display: none; }
+        #openBtn:hover { background-color: #27ae60; }
+        
+        #disconnectBtn { background-color: #e74c3c; display: none; }
+        #disconnectBtn:hover { background-color: #c0392b; }
+        
+        .status { margin-top: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
     <h1>🗑️ Smart Bin</h1>
-    <button id="connectBtn" class="btn connect">Connect to Bin</button>
-    <br>
-    <button id="openBtn" class="btn open">OPEN LID</button>
+    <div id="statusLabel" class="status">Status: Disconnected</div>
+    
+    <button id="connectBtn" class="btn">Connect to Bin</button><br>
+    <button id="openBtn" class="btn">OPEN LID</button><br>
+    <button id="disconnectBtn" class="btn">DISCONNECT</button>
 
     <script>
-        let binChar;
-        const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-        const CHAR_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+        let binDevice = null;
+        let binChar = null;
 
-        document.getElementById('connectBtn').addEventListener('click', async () => {
+        // Use the UUIDs from your ESP32 code
+        const SERVICE_UUID        = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+        const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+        const connectBtn = document.getElementById('connectBtn');
+        const openBtn = document.getElementById('openBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const statusLabel = document.getElementById('statusLabel');
+
+        // --- CONNECT LOGIC ---
+        connectBtn.addEventListener('click', async () => {
             try {
-                const device = await navigator.bluetooth.requestDevice({
+                statusLabel.innerText = "Searching...";
+                binDevice = await navigator.bluetooth.requestDevice({
                     filters: [{ name: 'SmartBin_ESP32' }],
                     optionalServices: [SERVICE_UUID]
                 });
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService(SERVICE_UUID);
-                binChar = await service.getCharacteristic(CHAR_UUID);
-                
-                document.getElementById('openBtn').style.display = 'inline-block';
-                document.getElementById('connectBtn').innerText = "Connected!";
-            } catch (error) { console.log(error); }
-        });
 
-        document.getElementById('openBtn').addEventListener('click', async () => {
-            if (binChar) {
-                let val = new Uint8Array([49]); // '1' in ASCII
-                await binChar.writeValue(val);
+                const server = await binDevice.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                binChar = await service.getCharacteristic(CHARACTERISTIC_UUID);
+                
+                // Update UI on success
+                statusLabel.innerText = "Status: Connected ✅";
+                connectBtn.style.display = 'none';
+                openBtn.style.display = 'inline-block';
+                disconnectBtn.style.display = 'inline-block';
+
+                // Listen for manual disconnection (like turning off the bin)
+                binDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+            } catch (error) {
+                console.log(error);
+                statusLabel.innerText = "Status: Connection Failed";
             }
         });
+
+        // --- OPEN LOGIC ---
+        openBtn.addEventListener('click', async () => {
+            if (binChar) {
+                try {
+                    let val = new Uint8Array([49]); // Sends '1' in ASCII
+                    await binChar.writeValue(val);
+                } catch (error) {
+                    console.log("Error sending command: " + error);
+                }
+            }
+        });
+
+        // --- DISCONNECT LOGIC ---
+        disconnectBtn.addEventListener('click', async () => {
+            if (binDevice && binDevice.gatt.connected) {
+                await binDevice.gatt.disconnect();
+            }
+        });
+
+        // Function to reset UI when disconnected
+        function onDisconnected() {
+            statusLabel.innerText = "Status: Disconnected ❌";
+            openBtn.style.display = 'none';
+            disconnectBtn.style.display = 'none';
+            connectBtn.style.display = 'inline-block';
+            connectBtn.innerText = "Connect to Bin";
+        }
     </script>
 </body>
 </html>
